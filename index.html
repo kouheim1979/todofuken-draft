@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>都道府県ドラフトバトル</title>
+  <style>
+    :root { --bg:#fff3a6;--ink:#111;--pink:#ff4fa3;--blue:#44d7ff;--green:#80ff72;--orange:#ff9f43;--shadow:0 8px 0 #111;--radius:16px; }
+    *{box-sizing:border-box} body{margin:0;font-family:"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;background:linear-gradient(135deg,#fff3a6,#ffd7ff);color:var(--ink)}
+    .app{max-width:1100px;margin:0 auto;padding:12px}
+    .screen{display:none}.screen.active{display:block;animation:fade .25s}.card{background:#fff;border:4px solid #111;border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;margin:10px 0}
+    h1,h2,h3{margin:.3em 0}.title{font-size:clamp(28px,7vw,52px);text-align:center;text-shadow:3px 3px #fff}
+    .btn{border:3px solid #111;border-radius:12px;padding:10px 14px;font-weight:700;background:var(--blue);box-shadow:0 5px 0 #111;cursor:pointer;transition:.08s;touch-action:manipulation}
+    .btn:active{transform:translateY(4px);box-shadow:0 1px 0 #111}.btn.alt{background:var(--pink)} .btn.green{background:var(--green)} .btn.orange{background:var(--orange)}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.grid{display:grid;gap:8px}.g2{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+    input,select{width:100%;padding:10px;border:3px solid #111;border-radius:10px;font-size:16px}
+    .badge{display:inline-block;padding:3px 8px;border:2px solid #111;border-radius:999px;background:#ffe45e;font-size:12px;font-weight:700}
+    .region{background:#f6f6f6;border:3px solid #111;border-radius:12px;padding:8px}.pref-btn{width:100%;text-align:left;padding:8px;border:3px solid #111;border-radius:10px;background:#fff;cursor:pointer}
+    .pref-btn.selected{background:#c8ffd0}.pref-btn.hometown{outline:3px dashed #ff2d55}.muted{opacity:.8;font-size:13px}
+    .battle-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+    .fighter.hometown-active{box-shadow:0 0 0 4px #ffe900,0 0 18px #ff8a00,var(--shadow)}
+    .winner{animation:pop .35s}.result-top{font-size:26px;color:#ff2d55;font-weight:900}
+    .small{font-size:12px}.rank1{background:linear-gradient(45deg,#ffe08a,#ff9)}
+    @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}} @keyframes fade{from{opacity:.4}to{opacity:1}}
+    @media (max-width:600px){.btn{width:100%}}
+  </style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+const PICK_COUNTS={quick:5,serious:10};
+const HOMETOWN_BONUS=5;
+const CATEGORIES=[
+ {key:'overall',label:'総合力'},{key:'population',label:'人口'},{key:'agriculture',label:'農業'},{key:'industry',label:'工業'},{key:'height',label:'平均身長'},{key:'academics',label:'学力'},{key:'sports',label:'体育'},{key:'area',label:'面積'},{key:'tourism',label:'観光'},{key:'joke',label:'ネタ力'}
+];
+const PREFECTURES=[
+{id:1,name:'北海道',region:'北海道',population:68,agriculture:98,industry:62,height:66,academics:70,sports:73,area:100,tourism:97,joke:78,description:'広大な大地で食も景色もモンスター級。',catchphrase:'でっかさは正義！'},
+{id:2,name:'青森',region:'東北',population:42,agriculture:84,industry:45,height:63,academics:64,sports:66,area:72,tourism:72,joke:76,description:'りんごとねぶたの熱量でじわ強い。',catchphrase:'りんごパワー全開！'},
+{id:3,name:'岩手',region:'東北',population:40,agriculture:80,industry:46,height:64,academics:65,sports:68,area:82,tourism:70,joke:69,description:'面積広めで粘り強いバランス型。',catchphrase:'広さと粘りで勝負！'},
+{id:4,name:'宮城',region:'東北',population:58,agriculture:63,industry:58,height:64,academics:67,sports:67,area:60,tourism:71,joke:68,description:'都市力と食の強みで攻める。',catchphrase:'牛たんスマッシュ！'},
+{id:5,name:'秋田',region:'東北',population:35,agriculture:82,industry:40,height:74,academics:79,sports:64,area:73,tourism:66,joke:67,description:'学力と長身の堅実な職人型。',catchphrase:'静かに強い、秋田流！'},
+{id:6,name:'山形',region:'東北',population:38,agriculture:78,industry:44,height:67,academics:73,sports:65,area:68,tourism:68,joke:71,description:'フルーツと努力で底力。',catchphrase:'さくらんぼ連打！'},
+{id:7,name:'福島',region:'東北',population:49,agriculture:76,industry:54,height:65,academics:66,sports:67,area:74,tourism:69,joke:70,description:'総合的に穴が少ない万能型。',catchphrase:'バランスで押し切る！'},
+{id:8,name:'茨城',region:'関東',population:63,agriculture:92,industry:71,height:66,academics:70,sports:69,area:75,tourism:60,joke:77,description:'農工ハイブリッドの実力派。',catchphrase:'実は最強クラス!?'} ,
+{id:9,name:'栃木',region:'関東',population:55,agriculture:74,industry:62,height:66,academics:69,sports:68,area:65,tourism:73,joke:69,description:'観光と産業の両刀使い。',catchphrase:'いちごチャージ完了！'},
+{id:10,name:'群馬',region:'関東',population:54,agriculture:70,industry:66,height:67,academics:68,sports:70,area:67,tourism:65,joke:75,description:'機動力のある筋肉質スタイル。',catchphrase:'からっ風で加速！'},
+{id:11,name:'埼玉',region:'関東',population:83,agriculture:58,industry:73,height:66,academics:72,sports:71,area:52,tourism:58,joke:66,description:'人口と通勤パワーで安定。',catchphrase:'地味って言うな、強いぞ！'},
+{id:12,name:'千葉',region:'関東',population:79,agriculture:90,industry:74,height:65,academics:71,sports:70,area:64,tourism:86,joke:73,description:'農業と観光を両立する万能艦。',catchphrase:'海と畑の二刀流！'},
+{id:13,name:'東京',region:'関東',population:100,agriculture:26,industry:94,height:64,academics:88,sports:74,area:40,tourism:98,joke:72,description:'人口・都市・観光の超攻撃型。',catchphrase:'人口パワーで押し切る大都会！'},
+{id:14,name:'神奈川',region:'関東',population:95,agriculture:40,industry:88,height:65,academics:84,sports:75,area:44,tourism:84,joke:68,description:'都会力と港パワーで高水準。',catchphrase:'港町コンボ炸裂！'},
+{id:15,name:'新潟',region:'中部',population:57,agriculture:86,industry:57,height:68,academics:72,sports:67,area:78,tourism:69,joke:71,description:'米どころの安定感が光る。',catchphrase:'お米エナジー満タン！'},
+{id:16,name:'富山',region:'中部',population:42,agriculture:65,industry:63,height:67,academics:75,sports:68,area:63,tourism:66,joke:65,description:'堅実な学力と工業で戦う。',catchphrase:'薬売りメンタルで粘る！'},
+{id:17,name:'石川',region:'中部',population:44,agriculture:63,industry:60,height:66,academics:82,sports:69,area:58,tourism:83,joke:70,description:'文化と学力のテクニカル型。',catchphrase:'文化と学力でじわっと強い！'},
+{id:18,name:'福井',region:'中部',population:34,agriculture:62,industry:61,height:67,academics:90,sports:72,area:60,tourism:62,joke:64,description:'学力特化の静かなボス。',catchphrase:'学力ガチ勢、静かなる実力者！'},
+{id:19,name:'山梨',region:'中部',population:33,agriculture:73,industry:49,height:66,academics:72,sports:66,area:61,tourism:75,joke:72,description:'フルーツと山の魅力で勝負。',catchphrase:'ぶどうアタック！'},
+{id:20,name:'長野',region:'中部',population:53,agriculture:77,industry:58,height:69,academics:78,sports:77,area:85,tourism:81,joke:67,description:'高原バフで総合力が高い。',catchphrase:'山のスタミナ無限！'},
+{id:21,name:'岐阜',region:'中部',population:52,agriculture:69,industry:63,height:67,academics:72,sports:70,area:80,tourism:74,joke:70,description:'中盤に強いオールラウンダー。',catchphrase:'真ん中パワーで勝つ！'},
+{id:22,name:'静岡',region:'中部',population:70,agriculture:81,industry:72,height:66,academics:75,sports:72,area:69,tourism:86,joke:71,description:'お茶と富士山のバランス型。',catchphrase:'お茶と富士山でバランス型！'},
+{id:23,name:'愛知',region:'中部',population:86,agriculture:55,industry:98,height:65,academics:79,sports:73,area:56,tourism:72,joke:66,description:'工業の爆発力がトップ級。',catchphrase:'ものづくりでゴリ押し！'},
+{id:24,name:'三重',region:'近畿',population:54,agriculture:68,industry:64,height:66,academics:71,sports:69,area:66,tourism:77,joke:69,description:'海も山もある実直タイプ。',catchphrase:'伊勢パワーで開運勝利！'},
+{id:25,name:'滋賀',region:'近畿',population:50,agriculture:63,industry:65,height:66,academics:78,sports:70,area:57,tourism:67,joke:63,description:'学力高めの理詰め派。',catchphrase:'琵琶湖の守りは鉄壁！'},
+{id:26,name:'京都',region:'近畿',population:58,agriculture:48,industry:57,height:64,academics:85,sports:67,area:59,tourism:95,joke:74,description:'文化と観光で魅せる技巧派。',catchphrase:'歴史ロマンで一撃！'},
+{id:27,name:'大阪',region:'近畿',population:90,agriculture:30,industry:86,height:64,academics:73,sports:74,area:43,tourism:89,joke:98,description:'ノリと都市力で勝負を決める。',catchphrase:'笑いで勝ってもええやん！'},
+{id:28,name:'兵庫',region:'近畿',population:72,agriculture:61,industry:78,height:65,academics:76,sports:72,area:70,tourism:82,joke:70,description:'都市と自然が共存する強豪。',catchphrase:'神戸港から逆転だ！'},
+{id:29,name:'奈良',region:'近畿',population:45,agriculture:57,industry:45,height:65,academics:77,sports:66,area:55,tourism:88,joke:79,description:'鹿と古都の観光力で刺す。',catchphrase:'鹿せんべいで友情UP！'},
+{id:30,name:'和歌山',region:'近畿',population:36,agriculture:74,industry:40,height:66,academics:67,sports:69,area:62,tourism:80,joke:76,description:'みかんと海の元気玉。',catchphrase:'みかん連打で勝利宣言！'},
+{id:31,name:'鳥取',region:'中国',population:28,agriculture:61,industry:39,height:66,academics:70,sports:67,area:54,tourism:76,joke:88,description:'砂丘とネタ力のロマン砲。',catchphrase:'砂の王者ここにあり！'},
+{id:32,name:'島根',region:'中国',population:29,agriculture:60,industry:38,height:66,academics:69,sports:66,area:63,tourism:79,joke:83,description:'神話バフで観光に強い。',catchphrase:'ご縁パワーで逆転！'},
+{id:33,name:'岡山',region:'中国',population:51,agriculture:72,industry:59,height:66,academics:73,sports:69,area:64,tourism:71,joke:68,description:'晴れの国の安定戦術。',catchphrase:'桃太郎がついてる！'},
+{id:34,name:'広島',region:'中国',population:61,agriculture:58,industry:75,height:66,academics:74,sports:74,area:65,tourism:78,joke:70,description:'工業とスポーツで押す。',catchphrase:'もみじパワード！'},
+{id:35,name:'山口',region:'中国',population:41,agriculture:59,industry:64,height:66,academics:71,sports:68,area:67,tourism:70,joke:67,description:'堅実なディフェンス型。',catchphrase:'ふぐスマイルで反撃！'},
+{id:36,name:'徳島',region:'四国',population:31,agriculture:64,industry:43,height:66,academics:68,sports:67,area:58,tourism:69,joke:75,description:'阿波おどりでテンション上昇。',catchphrase:'踊って勝てる県！'},
+{id:37,name:'香川',region:'四国',population:37,agriculture:60,industry:56,height:66,academics:74,sports:69,area:35,tourism:73,joke:84,description:'うどん回転率で手数が多い。',catchphrase:'うどんは実質エネルギー！'},
+{id:38,name:'愛媛',region:'四国',population:43,agriculture:73,industry:52,height:66,academics:72,sports:70,area:61,tourism:74,joke:72,description:'みかんとまじめさの混成軍。',catchphrase:'みかんでビタミン勝利！'},
+{id:39,name:'高知',region:'四国',population:27,agriculture:66,industry:37,height:67,academics:65,sports:70,area:71,tourism:77,joke:80,description:'豪快でロマンある一発型。',catchphrase:'カツオで気合い注入！'},
+{id:40,name:'福岡',region:'九州',population:74,agriculture:62,industry:76,height:65,academics:75,sports:76,area:59,tourism:85,joke:74,description:'都会力とグルメで安定高火力。',catchphrase:'めんたいパワー解放！'},
+{id:41,name:'佐賀',region:'九州',population:30,agriculture:69,industry:45,height:66,academics:71,sports:68,area:52,tourism:65,joke:82,description:'いじられ力と実力を両立。',catchphrase:'佐賀をなめたらあかん！'},
+{id:42,name:'長崎',region:'九州',population:39,agriculture:56,industry:50,height:65,academics:72,sports:69,area:57,tourism:87,joke:73,description:'異国情緒で観光が強い。',catchphrase:'港町ロマンで決める！'},
+{id:43,name:'熊本',region:'九州',population:48,agriculture:90,industry:55,height:66,academics:70,sports:73,area:68,tourism:78,joke:74,description:'農業の破壊力で一気に差をつける。',catchphrase:'くまモン魂で前進！'},
+{id:44,name:'大分',region:'九州',population:35,agriculture:62,industry:53,height:66,academics:69,sports:70,area:63,tourism:84,joke:70,description:'温泉バフで長期戦に強い。',catchphrase:'湯けむりヒートアップ！'},
+{id:45,name:'宮崎',region:'九州',population:34,agriculture:78,industry:40,height:67,academics:67,sports:72,area:69,tourism:74,joke:73,description:'南国テンションで攻める。',catchphrase:'太陽パワー満タン！'},
+{id:46,name:'鹿児島',region:'九州',population:44,agriculture:91,industry:48,height:67,academics:68,sports:73,area:76,tourism:82,joke:79,description:'農業と火山の迫力で勝負。',catchphrase:'桜島ドーンで勝つ！'},
+{id:47,name:'沖縄',region:'九州',population:46,agriculture:55,industry:36,height:65,academics:64,sports:71,area:50,tourism:99,joke:90,description:'観光と陽気さで会場を支配。',catchphrase:'青い海が最強バフ！'}
+];
+const state={screen:'title',players:[],playerCount:2,pickMode:'quick',gameMode:'individual',pickTarget:5,selectionIndex:0,sharedPicks:[],round:1,roundResults:[],lastBattle:null,currentCategory:''};
+const app=document.getElementById('app');
+function overall(p){const ks=['population','agriculture','industry','height','academics','sports','area','tourism','joke'];return Math.round(ks.reduce((s,k)=>s+p[k],0)/ks.length)}
+function safeLS(k,v,write=true){try{if(write)localStorage.setItem(k,JSON.stringify(v));else{return JSON.parse(localStorage.getItem(k)||'null')}}catch(e){return null}}
+function init(){const saved=safeLS('prefBattleConfig',null,false)||{};state.playerCount=Math.min(6,Math.max(2,saved.playerCount||2));state.pickMode=saved.pickMode||'quick';state.gameMode=saved.gameMode||'individual';render()}
+function goto(screen){state.screen=screen;render()}
+function buildPlayers(){state.playerCount=Math.min(6,Math.max(2,Number(document.getElementById('playerCount').value)||2));state.pickMode=document.querySelector('input[name="pickMode"]:checked')?.value||'quick';state.gameMode=document.querySelector('input[name="gameMode"]:checked')?.value||'individual';state.pickTarget=PICK_COUNTS[state.pickMode];state.players=[];for(let i=0;i<state.playerCount;i++){const n=document.getElementById('name'+i).value.trim()||`プレイヤー${i+1}`;const hometown=Number(document.getElementById('home'+i).value)||null;state.players.push({id:i,name:n,hometown,picks:[],order:[],wins:0,hometownBoostWins:0});}
+ safeLS('prefBattleConfig',{playerCount:state.playerCount,pickMode:state.pickMode,gameMode:state.gameMode,names:state.players.map(p=>p.name),homes:state.players.map(p=>p.hometown)});
+ state.selectionIndex=0;state.sharedPicks=[];goto('pick')}
+function pickForCurrent(prefId){if(state.gameMode==='shared'){togglePickArray(state.sharedPicks,prefId,state.pickTarget);} else {togglePickArray(state.players[state.selectionIndex].picks,prefId,state.pickTarget);}render()}
+function togglePickArray(arr,id,max){const ix=arr.indexOf(id); if(ix>=0)arr.splice(ix,1); else if(arr.length<max)arr.push(id)}
+function finalizePicks(){if(state.gameMode==='individual'){if(state.players[state.selectionIndex].picks.length!==state.pickTarget)return alert('必要数を選んでね！'); if(state.selectionIndex<state.players.length-1){state.selectionIndex++;render();return;} state.players.forEach(p=>p.order=[...p.picks]);}
+ else {if(state.sharedPicks.length!==state.pickTarget)return alert('共通県を必要数選んでね！'); state.players.forEach(p=>{p.picks=[...state.sharedPicks];p.order=[...state.sharedPicks]});}
+ goto('order')}
+function moveOrder(pi,idx,dir){const arr=state.players[pi].order;const ni=idx+dir;if(ni<0||ni>=arr.length)return;[arr[idx],arr[ni]]=[arr[ni],arr[idx]];render()}
+function readyBattle(){if(state.players.some(p=>p.order.length!==state.pickTarget))return alert('並び替えが未完了です');state.round=1;state.roundResults=[];state.players.forEach(p=>{p.wins=0;p.hometownBoostWins=0});state.currentCategory='';goto('battle')}
+function chooseRandomCategory(){state.currentCategory=CATEGORIES[Math.floor(Math.random()*CATEGORIES.length)].key;render()}
+function getScore(pref,key,hometown){let base= key==='overall'?overall(pref):pref[key];const bonus=(hometown&&pref.id===hometown)?HOMETOWN_BONUS:0;return {base,bonus,total:base+bonus}}
+function chapiJudge(entries){const sorted=[...entries].sort((a,b)=>b.pref.joke-a.pref.joke||b.pref.tourism-a.pref.tourism||b.boost-a.boost||a.pref.region.localeCompare(b.pref.region));const win=sorted[0];const msg=`うーん、完全にチャピ子の独断！今日は${win.pref.name}の「${win.pref.catchphrase}」が刺さったので勝ち！`;return {winnerIds:[win.player.id],reason:msg,chapi:true}}
+function runBattle(){if(!state.currentCategory)state.currentCategory=CATEGORIES[Math.floor(Math.random()*CATEGORIES.length)].key;
+ const entries=state.players.map(p=>{const pref=PREFECTURES.find(x=>x.id===p.order[state.round-1]);const sc=getScore(pref,state.currentCategory,p.hometown);const ov=getScore(pref,'overall',p.hometown);return {player:p,pref,score:sc,overall:ov,boost:sc.bonus>0};});
+ let max=Math.max(...entries.map(e=>e.score.total));let winners=entries.filter(e=>e.score.total===max);
+ let reason=''; let chapi=false;
+ if(winners.length>1){const maxOv=Math.max(...winners.map(w=>w.overall.total));winners=winners.filter(w=>w.overall.total===maxOv);reason='同点！総合力判定へ！';}
+ if(winners.length>1){const j=chapiJudge(winners);winners=entries.filter(e=>j.winnerIds.includes(e.player.id));reason=j.reason;chapi=true;}
+ winners.forEach(w=>{w.player.wins++;if(w.boost)w.player.hometownBoostWins++;});
+ state.lastBattle={entries,winners,reason,chapi,category:state.currentCategory};
+ state.roundResults.push(state.lastBattle);
+ render();}
+function nextRound(){if(state.round>=state.pickTarget){goto('result');return;} state.round++;state.currentCategory='';state.lastBattle=null;render()}
+function resultData(){const sorted=[...state.players].sort((a,b)=>b.wins-a.wins);const mvpCount={};state.roundResults.forEach(r=>r.winners.forEach(w=>{mvpCount[w.pref.id]=(mvpCount[w.pref.id]||0)+1}));let mvpId=Number(Object.keys(mvpCount).sort((a,b)=>mvpCount[b]-mvpCount[a])[0]||state.players[0].order[0]);
+ const closest=state.roundResults.map((r,i)=>{const vals=r.entries.map(e=>e.score.total).sort((a,b)=>b-a);return {round:i+1,diff:(vals[0]-vals[1]||0)}}).sort((a,b)=>a.diff-b.diff)[0];
+ const boostKing=[...state.players].sort((a,b)=>b.hometownBoostWins-a.hometownBoostWins)[0];return {sorted,mvp:PREFECTURES.find(p=>p.id===mvpId),closest,boostKing};}
+function resetSaved(){try{localStorage.removeItem('prefBattleConfig')}catch(e){} alert('保存データをリセットしました！')}
+function render(){app.innerHTML=renderHTML();bindEvents()}
+function optionsPref(selected){return `<option value="">未設定</option>`+PREFECTURES.map(p=>`<option value="${p.id}" ${selected===p.id?'selected':''}>${p.name}</option>`).join('')}
+function prefGrid(selectedArr,homeIds,search=''){const byRegion={};PREFECTURES.forEach(p=>{if(search&&!(p.name+p.region+p.catchphrase).includes(search))return;(byRegion[p.region]=byRegion[p.region]||[]).push(p)});
+ return Object.entries(byRegion).map(([r,list])=>`<div class="region"><h3>${r}</h3>${list.map(p=>`<button class="pref-btn ${selectedArr.includes(p.id)?'selected':''} ${homeIds.includes(p.id)?'hometown':''}" data-pref="${p.id}">${p.name} ${homeIds.includes(p.id)?'<span class="badge">地元</span>':''}<div class="small">${p.catchphrase}</div></button>`).join('')}</div>`).join('')}
+function renderHTML(){const s=state.screen;const cfg=safeLS('prefBattleConfig',null,false)||{};
+ if(s==='title')return `<section class="screen active"><div class="card"><h1 class="title">🎌 都道府県ドラフトバトル ⚔️</h1><p>地元愛、データ、そして謎のひいきで勝ちぬけ！</p><p class="muted">都道府県の強さ、今日は何で決まる？人口か？農業か？それともネタ力か？</p><button class="btn alt" id="startBtn">スタート！</button></div></section>`;
+ if(s==='setup')return `<section class="screen active"><div class="card"><h2>👥 プレイヤー設定</h2><label>人数(2〜6)<input id="playerCount" type="number" min="2" max="6" value="${state.playerCount}"></label><div class="row"><label><input type="radio" name="pickMode" value="quick" ${state.pickMode==='quick'?'checked':''}>サクッと5県バトル</label><label><input type="radio" name="pickMode" value="serious" ${state.pickMode==='serious'?'checked':''}>ガチめの10県バトル</label></div><div class="row"><label><input type="radio" name="gameMode" value="individual" ${state.gameMode==='individual'?'checked':''}>個別ドラフト</label><label><input type="radio" name="gameMode" value="shared" ${state.gameMode==='shared'?'checked':''}>共通県モード</label></div><div class="grid g2">${Array.from({length:state.playerCount}).map((_,i)=>`<div class="card"><h3>P${i+1}</h3><input id="name${i}" placeholder="プレイヤー名" value="${cfg.names?.[i]||''}"><select id="home${i}">${optionsPref(cfg.homes?.[i]||null)}</select></div>`).join('')}</div><button class="btn green" id="toPick">次へ</button><button class="btn" id="resetSave">保存データをリセット</button></div></section>`;
+ if(s==='pick'){const homeIds=state.players.map(p=>p.hometown).filter(Boolean);const selected=state.gameMode==='shared'?state.sharedPicks:state.players[state.selectionIndex].picks;const title=state.gameMode==='shared'?'共通県選択':`${state.players[state.selectionIndex].name} の選択`;return `<section class="screen active"><div class="card"><h2>🗾 都道府県選択 - ${title}</h2><p>選択済み: <b>${selected.length}/${state.pickTarget}</b></p><input id="search" placeholder="検索（県名・地方・キャッチコピー）"> <div class="grid g2" id="prefWrap">${prefGrid(selected,homeIds)}</div><button class="btn green" id="pickNext">${state.gameMode==='individual'&&state.selectionIndex<state.players.length-1?'次のプレイヤーへ':'並び替えへ'}</button></div></section>`}
+ if(s==='order')return `<section class="screen active"><div class="card"><h2>🔢 並び替え</h2>${state.players.map((p,pi)=>`<div class="card"><h3>${p.name}</h3>${p.order.map((id,idx)=>{const pref=PREFECTURES.find(x=>x.id===id);return `<div class="row"><span>${idx+1}番手: ${pref.name} ${p.hometown===id?'<span class="badge">地元</span>':''}</span><button class="btn small" data-move="${pi},${idx},-1">上へ</button><button class="btn small" data-move="${pi},${idx},1">下へ</button></div>`}).join('')}</div>`).join('')}<button class="btn orange" id="toBattle">バトル開始！</button></div></section>`;
+ if(s==='battle'){const b=state.lastBattle;return `<section class="screen active"><div class="card"><h2>⚔️ バトル画面</h2><p>ラウンド ${state.round}/${state.pickTarget}</p><h3>なにで勝負する？</h3><select id="catSel"><option value="">選択してね</option>${CATEGORIES.map(c=>`<option value="${c.key}" ${state.currentCategory===c.key?'selected':''}>${c.label}</option>`).join('')}</select><div class="row"><button class="btn" id="randomCat">おまかせ項目</button><button class="btn alt" id="fightBtn">この項目でバトル！</button></div>${b?`<div class="battle-cards">${b.entries.map(e=>`<div class="card fighter ${b.winners.includes(e)?'winner':''} ${e.boost?'hometown-active':''}"><h3>${e.player.name}</h3><h4>${e.pref.name}</h4><div>${e.pref.catchphrase}</div><div>基本:${e.score.base} ${e.score.bonus?`<span class='badge'>+${HOMETOWN_BONUS} 地元愛ボーナス！</span>`:''}</div><div><b>補正後:${e.score.total}</b></div><div class='small'>総合力:${e.overall.total}</div>${e.boost?'<div>✨地元の意地を見せた！</div>':''}</div>`).join('')}</div><div class="card ${b.chapi?'rank1':''}"><h3>勝者: ${b.winners.map(w=>w.player.name).join(' / ')}</h3><p>${b.reason||'項目スコア勝負で決着！'}</p>${b.chapi?'<p>🎤 チャピ子判定発動！これはひいきではない、郷土愛です！</p>':''}</div><button class="btn green" id="nextRound">${state.round>=state.pickTarget?'結果へ':'次のラウンドへ'}</button>`:''}</div></section>`}
+ if(s==='result'){const r=resultData();return `<section class="screen active"><div class="card"><h2>🏆 結果発表</h2><div class="result-top">1位: ${r.sorted[0].name} (${r.sorted[0].wins}勝)</div>${r.sorted.map((p,i)=>`<div class="card ${i===0?'rank1':''}">${i+1}位 ${p.name} - ${p.wins}勝</div>`).join('')}<div class="card"><h3>MVP都道府県: ${r.mvp.name}</h3><p>${r.mvp.catchphrase}</p><p>一番接戦: ${r.closest.round}回戦（差${r.closest.diff}）</p><p>出身地補正王: ${r.boostKing.name}（${r.boostKing.hometownBoostWins}回ブースト勝利）</p></div><button class="btn orange" id="again">もう一度遊ぶ</button><button class="btn" id="toTitle">最初に戻る</button></div></section>`}
+}
+function bindEvents(){document.getElementById('startBtn')?.addEventListener('click',()=>goto('setup'));document.getElementById('toPick')?.addEventListener('click',buildPlayers);document.getElementById('resetSave')?.addEventListener('click',resetSaved);
+ document.querySelectorAll('[data-pref]').forEach(b=>b.addEventListener('click',()=>pickForCurrent(Number(b.dataset.pref))));document.getElementById('pickNext')?.addEventListener('click',finalizePicks);
+ document.getElementById('search')?.addEventListener('input',e=>{document.getElementById('prefWrap').innerHTML=prefGrid((state.gameMode==='shared'?state.sharedPicks:state.players[state.selectionIndex].picks),state.players.map(p=>p.hometown).filter(Boolean),e.target.value);bindEvents();});
+ document.querySelectorAll('[data-move]').forEach(b=>b.addEventListener('click',()=>{const [pi,idx,dir]=b.dataset.move.split(',').map(Number);moveOrder(pi,idx,dir)}));
+ document.getElementById('toBattle')?.addEventListener('click',readyBattle);document.getElementById('randomCat')?.addEventListener('click',chooseRandomCategory);
+ document.getElementById('catSel')?.addEventListener('change',e=>state.currentCategory=e.target.value);document.getElementById('fightBtn')?.addEventListener('click',runBattle);document.getElementById('nextRound')?.addEventListener('click',nextRound);
+ document.getElementById('again')?.addEventListener('click',()=>goto('setup'));document.getElementById('toTitle')?.addEventListener('click',()=>goto('title'));}
+init();
+</script>
+</body>
+</html>
