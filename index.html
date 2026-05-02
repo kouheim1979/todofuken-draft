@@ -25,7 +25,7 @@ input,select{width:100%;padding:12px;border:3px solid var(--c-line);border-radiu
 .small{font-size:12px;color:var(--c-ink-soft)}.center{text-align:center}.sectionTitle{font:900 22px "M PLUS Rounded 1c",sans-serif}
 .pill{display:inline-block;padding:8px 14px;border:3px solid var(--c-line);border-radius:999px;background:var(--info);font:800 14px "M PLUS Rounded 1c",sans-serif}
 .dragHandle{font-size:30px;cursor:grab;margin-right:8px;padding:6px 12px;min-width:44px;min-height:44px;display:inline-grid;place-items:center;border:3px dashed var(--c-line);border-radius:12px;background:var(--c-sun);touch-action:none;-webkit-user-select:none;user-select:none}
-.floatingDragCard{position:fixed;left:0;top:0;width:var(--drag-w,260px);pointer-events:none;z-index:99999;opacity:.96;transform:translate3d(0,0,0) rotate(-2deg) scale(1.04);box-shadow:7px 7px 0 var(--c-line);background:var(--c-paper);border:3px solid var(--c-line);border-radius:16px}
+.floatingDragCard{position:fixed!important;left:0;top:0;width:var(--drag-w,260px);max-width:calc(100vw - 24px);pointer-events:none;z-index:99999;opacity:.96;transform:rotate(-2deg) scale(1.04)!important;box-shadow:7px 7px 0 var(--c-line);background:var(--c-paper);border:3px solid var(--c-line);border-radius:16px;margin:0!important}
 .dragPlaceholder{min-height:64px;border:3px dashed var(--c-line);border-radius:16px;background:var(--info);box-shadow:none}
 body.isDragging{touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}
 .roundCard{background:var(--info);border:3px solid var(--c-line);border-radius:14px;padding:10px;margin:8px 0}.crown{font-size:34px}.warn{background:var(--warn);border:3px solid var(--c-line);border-radius:12px;padding:10px;font-weight:700}
@@ -192,11 +192,12 @@ function enableTouchReorder(container,options){
   }
 
   function moveClone(x,y){
-    if(!drag)return;
-    const left=Math.round(x-drag.offsetX);
-    const top=Math.round(y-drag.offsetY);
-    drag.clone.style.transform="translate3d("+left+"px, "+top+"px, 0) rotate(-2deg) scale(1.04)";
-  }
+  if(!drag)return;
+  const left=Math.round(x-drag.offsetX);
+  const top=Math.round(y-drag.offsetY);
+  drag.clone.style.left=left+"px";
+  drag.clone.style.top=top+"px";
+}
 
   function movePlaceholder(y){
     if(!drag)return;
