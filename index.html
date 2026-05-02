@@ -24,7 +24,10 @@ input,select{width:100%;padding:12px;border:3px solid var(--c-line);border-radiu
 .pref{border:3px solid var(--c-line);border-radius:12px;box-shadow:var(--s);padding:10px;background:var(--c-paper);cursor:pointer}.pref b{font:900 20px "M PLUS Rounded 1c",sans-serif}.pref .small{font-size:13px;color:var(--c-ink)}.pref.mine{background:var(--info)}.pref.locked{background:var(--warn);opacity:.7;cursor:not-allowed}.winner{background:var(--ok);transform:scale(1.04);animation:pulse .9s ease-in-out 2}
 .small{font-size:12px;color:var(--c-ink-soft)}.center{text-align:center}.sectionTitle{font:900 22px "M PLUS Rounded 1c",sans-serif}
 .pill{display:inline-block;padding:8px 14px;border:3px solid var(--c-line);border-radius:999px;background:var(--info);font:800 14px "M PLUS Rounded 1c",sans-serif}
-.dragHandle{font-size:30px;cursor:grab;margin-right:8px;padding:6px 12px;min-width:44px;min-height:44px;display:inline-grid;place-items:center;border:3px dashed var(--c-line);border-radius:12px;background:var(--c-sun);touch-action:none;-webkit-user-select:none;user-select:none} .drag-ghost{opacity:.35!important;background:var(--info)!important} .drag-chosen{background:var(--warn)!important} .drag-fallback{opacity:.95!important;transform:rotate(-2deg) scale(1.04)!important;box-shadow:7px 7px 0 var(--c-line)!important;pointer-events:none!important;z-index:9999!important;border:3px solid var(--c-line)!important;background:var(--c-paper)!important;position:fixed!important;left:0;top:0} .dragging-active,.dragging-active *{cursor:grabbing!important}
+.dragHandle{font-size:30px;cursor:grab;margin-right:8px;padding:6px 12px;min-width:44px;min-height:44px;display:inline-grid;place-items:center;border:3px dashed var(--c-line);border-radius:12px;background:var(--c-sun);touch-action:none;-webkit-user-select:none;user-select:none}
+.floatingDragCard{position:fixed;left:0;top:0;width:var(--drag-w,260px);pointer-events:none;z-index:99999;opacity:.96;transform:translate3d(0,0,0) rotate(-2deg) scale(1.04);box-shadow:7px 7px 0 var(--c-line);background:var(--c-paper);border:3px solid var(--c-line);border-radius:16px}
+.dragPlaceholder{min-height:64px;border:3px dashed var(--c-line);border-radius:16px;background:var(--info);box-shadow:none}
+body.isDragging{touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}
 .roundCard{background:var(--info);border:3px solid var(--c-line);border-radius:14px;padding:10px;margin:8px 0}.crown{font-size:34px}.warn{background:var(--warn);border:3px solid var(--c-line);border-radius:12px;padding:10px;font-weight:700}
 .regionTitle{font:900 24px "M PLUS Rounded 1c",sans-serif}.split{flex:1}.playerCard{background:var(--info)}.neoBtn{border-radius:999px;width:58px;height:58px;padding:0;background:var(--c-sun);color:var(--c-ink}
 @keyframes pop{from{transform:scale(.98);opacity:.4}to{transform:scale(1);opacity:1}}@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}@keyframes pulse{0%,100%{transform:scale(1.04)}50%{transform:scale(1.08)}}
@@ -32,7 +35,6 @@ input,select{width:100%;padding:12px;border:3px solid var(--c-line);border-radiu
 @media (prefers-reduced-motion: reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 </style>
 </head><body><div class="app" id="app"></div>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
 const SUPABASE_URL="",SUPABASE_ANON_KEY=""; // 未設定ならローカル専用
 const HOMETOWN_BONUS=5,MAX_PLAYERS=20,MIN_PLAYERS=2;
@@ -160,7 +162,140 @@ function getConcreteMetric(pref, key) {
   };
 }
 function generateBattleCommentary(log){const w=log.cards.find(c=>c.p.id===log.winner);const second=log.cards[1];const item=label(log.category);const metric=getConcreteMetric(w.pref,log.category);let txt=`今回の勝負項目は「${item}」。${w.pref.name}が勝利！ `;txt+=`${categoryPhrase(log.category)}で ${metric.value}（スコア ${w.base}）`;if(w.bonus)txt+=`、地元ボーナス +${w.bonus} も加わり`;txt+=`最終 ${w.final} 点でした。`;if(second)txt+=` 2位は${second.pref.name}で ${second.final} 点、差は ${w.final-second.final} 点です。`;if(log.reason.includes('チャピ子'))txt+=' 同点だったため、総合力やネタ力を使ったタイブレークで決着しました。';txt+=` 「${w.pref.catchphrase}」`;return txt}
-function sortableNotice(){return window.Sortable?"":"<div class='warn'>⚠️ 並び替え機能を読み込み中です。失敗した場合はページを再読み込みしてください。</div>"}
+function sortableNotice(){return ""}
+function enableTouchReorder(container,options){
+  if(!container||container.dataset.touchReorderBound==="1")return;
+  container.dataset.touchReorderBound="1";
+
+  const itemSelector=options.itemSelector;
+  const handleSelector=options.handleSelector;
+  const supportsPointer="PointerEvent" in window;
+
+  let drag=null;
+
+  function getPoint(e){
+    const t=e.touches&&e.touches[0]?e.touches[0]:e.changedTouches&&e.changedTouches[0]?e.changedTouches[0]:e;
+    return {x:t.clientX||0,y:t.clientY||0};
+  }
+
+  function getDirectItemsIncludingPlaceholder(){
+    if(!drag)return [];
+    return Array.from(container.children).filter(function(el){
+      if(el===drag.item)return false;
+      return el===drag.placeholder||el.matches(itemSelector);
+    });
+  }
+
+  function getNewIndex(){
+    if(!drag)return -1;
+    return getDirectItemsIncludingPlaceholder().indexOf(drag.placeholder);
+  }
+
+  function moveClone(x,y){
+    if(!drag)return;
+    const left=Math.round(x-drag.offsetX);
+    const top=Math.round(y-drag.offsetY);
+    drag.clone.style.transform="translate3d("+left+"px, "+top+"px, 0) rotate(-2deg) scale(1.04)";
+  }
+
+  function movePlaceholder(y){
+    if(!drag)return;
+    const items=Array.from(container.children).filter(function(el){
+      return el!==drag.item&&el!==drag.placeholder&&el.matches(itemSelector);
+    });
+    let inserted=false;
+    for(const item of items){
+      const rect=item.getBoundingClientRect();
+      const middleY=rect.top+rect.height/2;
+      if(y<middleY){container.insertBefore(drag.placeholder,item);inserted=true;break;}
+    }
+    if(!inserted)container.appendChild(drag.placeholder);
+  }
+
+  function addDocumentListeners(){
+    if(supportsPointer){
+      document.addEventListener("pointermove",onMove,{passive:false});
+      document.addEventListener("pointerup",onEnd,{passive:false});
+      document.addEventListener("pointercancel",onEnd,{passive:false});
+    }else{
+      document.addEventListener("touchmove",onMove,{passive:false});
+      document.addEventListener("touchend",onEnd,{passive:false});
+      document.addEventListener("touchcancel",onEnd,{passive:false});
+    }
+  }
+
+  function removeDocumentListeners(){
+    if(supportsPointer){
+      document.removeEventListener("pointermove",onMove);
+      document.removeEventListener("pointerup",onEnd);
+      document.removeEventListener("pointercancel",onEnd);
+    }else{
+      document.removeEventListener("touchmove",onMove);
+      document.removeEventListener("touchend",onEnd);
+      document.removeEventListener("touchcancel",onEnd);
+    }
+  }
+
+  function onStart(e){
+    const handle=e.target.closest(handleSelector);
+    if(!handle||!container.contains(handle))return;
+    const item=handle.closest(itemSelector);
+    if(!item||!container.contains(item))return;
+    if(e.cancelable)e.preventDefault();
+    e.stopPropagation();
+    const beforeItems=Array.from(container.children).filter(function(el){return el.matches(itemSelector);});
+    const oldIndex=beforeItems.indexOf(item);
+    if(oldIndex<0)return;
+    const point=getPoint(e);
+    const rect=item.getBoundingClientRect();
+    const placeholder=document.createElement(item.tagName.toLowerCase()==="li"?"li":"div");
+    placeholder.className="dragPlaceholder";
+    placeholder.style.height=rect.height+"px";
+    placeholder.style.width=rect.width+"px";
+    if(item.tagName.toLowerCase()==="li")placeholder.style.listStyle="none";
+    const clone=item.cloneNode(true);
+    clone.classList.add("floatingDragCard");
+    clone.style.setProperty("--drag-w",rect.width+"px");
+    clone.style.height=rect.height+"px";
+    document.body.appendChild(clone);
+    const oldDisplay=item.style.display;
+    item.parentNode.insertBefore(placeholder,item);
+    item.style.display="none";
+    drag={item:item,placeholder:placeholder,clone:clone,oldIndex:oldIndex,oldDisplay:oldDisplay,offsetX:point.x-rect.left,offsetY:point.y-rect.top,pointerId:e.pointerId,handle:handle};
+    document.body.classList.add("isDragging");
+    moveClone(point.x,point.y);
+    if(supportsPointer&&e.pointerId!=null&&handle.setPointerCapture){try{handle.setPointerCapture(e.pointerId);}catch(err){}}
+    addDocumentListeners();
+  }
+
+  function onMove(e){
+    if(!drag)return;
+    if(e.cancelable)e.preventDefault();
+    const point=getPoint(e);
+    moveClone(point.x,point.y);
+    movePlaceholder(point.y);
+  }
+
+  function onEnd(e){
+    if(!drag)return;
+    if(e&&e.cancelable)e.preventDefault();
+    const oldIndex=drag.oldIndex;
+    let newIndex=getNewIndex();
+    if(newIndex<0)newIndex=oldIndex;
+    if(supportsPointer&&drag.pointerId!=null&&drag.handle&&drag.handle.releasePointerCapture){try{drag.handle.releasePointerCapture(drag.pointerId);}catch(err){}}
+    drag.item.style.display=drag.oldDisplay||"";
+    if(drag.clone&&drag.clone.parentNode)drag.clone.parentNode.removeChild(drag.clone);
+    if(drag.placeholder&&drag.placeholder.parentNode)drag.placeholder.parentNode.removeChild(drag.placeholder);
+    document.body.classList.remove("isDragging");
+    removeDocumentListeners();
+    const shouldReorder=oldIndex!==newIndex;
+    const callback=options.onReorder;
+    drag=null;
+    if(shouldReorder&&typeof callback==="function")callback(oldIndex,newIndex);
+  }
+
+  container.addEventListener(supportsPointer?"pointerdown":"touchstart",onStart,{passive:false});
+}
 function nextRound(){if(state.currentRound<state.pickPer){state.currentRound++;prepareRoundCategory();render()}else state.screen='result',render()}
 function resetGame(){state.screen='title';state.pickTurn=0;state.orderTurn=0;state.currentRound=1;state.players=[];state.battleLog=[];render()}
 function render(){app.innerHTML='';if(state.screen==='title')app.innerHTML=`<div class='heroWrap'><h1 class='title'>都道府県ドラフトバトル</h1><svg class='mascot' viewBox='0 0 340 270' aria-label='日本列島マスコット'><g stroke='var(--c-line)' stroke-width='6' fill='none'><path d='M78 58 l22 -20 20 10 16 -8 20 14 2 18 18 12 -12 18 14 14 -18 14 -6 20 -20 4 -10 20 -20 -8 -16 12 -14 -12 -20 8 -8 -18 -18 -4 2 -18 -16 -12 12 -16 -8 -16 18 -8z' fill='var(--c-hero)'/><circle cx='120' cy='118' r='6' fill='var(--c-line)'/><circle cx='156' cy='118' r='6' fill='var(--c-line)'/><circle cx='108' cy='136' r='8' fill='var(--c-sun)'/><circle cx='170' cy='136' r='8' fill='var(--c-sun)'/><path d='M124 152 q16 12 32 0' stroke-linecap='round'/><path d='M176 162 q22 -2 34 -22' /><rect x='214' y='102' width='80' height='96' rx='12' fill='var(--c-paper)'/><path d='M228 128 h48 M228 148 h48 M228 168 h30'/><path d='M134 18 l14 -14 14 14 -6 18 h-16z' fill='var(--c-sun)'/><path d='M44 72 l16 -8 10 16 -14 10z' fill='var(--c-sun)'/><path d='M284 72 l18 10 -10 16 -16 -8z' fill='var(--c-sun)'/></g></svg><p><span class='subtitle'>ドラフトして、都道府県でバトル！</span></p></div><div class='card center'><button class='btn hero' id='local'>ローカルで遊ぶ</button><button class='btn' id='room'>部屋をつくる/はいる</button><p class='small'>部屋コードを使って、進行状態を保存・再開できます（同じブラウザ内）。</p></div>`;
@@ -181,8 +316,34 @@ on('rst',()=>{S.clear();state.playerCount=2;state.pickPer=2;state.draftType='ord
 on('goDraft',()=>{state.pickTurn=0;state.pickRound=1;state.search='';state.players.forEach((p,i)=>{p.name=p.name||`プレイヤー${i+1}`;p.picks=[];p.wins=0;p.bonusHits=0});S.set('tdb_save',{playerCount:state.playerCount,pickPer:state.pickPer,draftType:state.draftType,category:state.category,players:state.players.map(p=>({name:p.name,hometown:p.hometown}))});state.screen='draft';render()});
 document.getElementById('srch')?.addEventListener('input',e=>{state.search=e.target.value;render()});document.querySelectorAll('.pref').forEach(el=>el.onclick=()=>togglePick(+el.dataset.id));
 on('toOrder',()=>{state.orderTurn=0;state.screen='order';render()});
-const list=document.getElementById('olist');if(list&&window.Sortable){Sortable.create(list,{animation:180,delay:120,delayOnTouchOnly:true,handle:'.dragHandle',forceFallback:true,fallbackOnBody:true,fallbackClass:'drag-fallback',ghostClass:'drag-ghost',chosenClass:'drag-chosen',dragClass:'dragging-active',touchStartThreshold:4,fallbackTolerance:6,onStart:()=>document.body.classList.add('dragging-active'),onEnd:(evt)=>{document.body.classList.remove('dragging-active');if(evt.oldIndex===evt.newIndex)return;const arr=state.players[state.orderTurn].picks;const [x]=arr.splice(evt.oldIndex,1);arr.splice(evt.newIndex,0,x);render();}});}
-const pl=document.getElementById('playerSort');if(pl&&window.Sortable){Sortable.create(pl,{animation:180,delay:120,delayOnTouchOnly:true,handle:'.dragHandle',forceFallback:true,fallbackOnBody:true,fallbackClass:'drag-fallback',ghostClass:'drag-ghost',chosenClass:'drag-chosen',dragClass:'dragging-active',touchStartThreshold:4,fallbackTolerance:6,onStart:()=>document.body.classList.add('dragging-active'),onEnd:(evt)=>{document.body.classList.remove('dragging-active');if(evt.oldIndex===evt.newIndex)return;const [x]=state.players.splice(evt.oldIndex,1);state.players.splice(evt.newIndex,0,x);state.players.forEach((p,i)=>p.id=i+1);render();}});}
+const list=document.getElementById('olist');
+if(list){
+  enableTouchReorder(list,{
+    itemSelector:'.od',
+    handleSelector:'.dragHandle',
+    onReorder(oldIndex,newIndex){
+      if(oldIndex===newIndex)return;
+      const arr=state.players[state.orderTurn].picks;
+      const [x]=arr.splice(oldIndex,1);
+      arr.splice(newIndex,0,x);
+      render();
+    }
+  });
+}
+const pl=document.getElementById('playerSort');
+if(pl){
+  enableTouchReorder(pl,{
+    itemSelector:'.od',
+    handleSelector:'.dragHandle',
+    onReorder(oldIndex,newIndex){
+      if(oldIndex===newIndex)return;
+      const [x]=state.players.splice(oldIndex,1);
+      state.players.splice(newIndex,0,x);
+      state.players.forEach((p,i)=>p.id=i+1);
+      render();
+    }
+  });
+}
 on('orderNext',()=>{if(state.orderTurn<state.players.length-1){state.orderTurn++;render();return}if(!validBeforeBattle()){alert('未選択プレイヤーがいます');return}state.currentRound=1;state.battleLog=[];prepareRoundCategory();state.screen='battle';render()});
 on('fr',fightRound);on('nr',nextRound);on('share',async()=>{const rank=[...state.players].sort((a,b)=>b.wins-a.wins);const txt=`都道府県ドラフトバトル結果\n1位: ${rank[0]?.name||'-'} ${rank[0]?.wins||0}勝\nMVP: ${(()=>{const m={};state.battleLog.forEach(l=>{const w=l.cards.find(c=>c.p.id===l.winner);if(w)m[w.pref.name]=(m[w.pref.name]||0)+1});const e=Object.entries(m).sort((a,b)=>b[1]-a[1])[0];return e?`${e[0]}（${e[1]}勝）`:'なし'})()}`;if(navigator.share){try{await navigator.share({title:'都道府県ドラフトバトル結果',text:txt});}catch(e){}}else if(navigator.clipboard){await navigator.clipboard.writeText(txt);alert('結果テキストをコピーしました');}});on('again',()=>{state.screen='setup';mkPlayers();render()});on('home',resetGame);if(state.roomCode)S.set('tdb_room_'+state.roomCode,{screen:state.screen,playerCount:state.playerCount,pickPer:state.pickPer,draftType:state.draftType,category:state.category,players:state.players,pickTurn:state.pickTurn,orderTurn:state.orderTurn,currentRound:state.currentRound,battleLog:state.battleLog});}
 // Supabase将来対応（ローカル動作を壊さないガード）
