@@ -1,0 +1,52 @@
+name: Game quality checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Syntax and regression tests
+        run: |
+          node --check data.js
+          node --check engine.js
+          node --check online.js
+          node --check app.js
+          node test-engine.cjs
+          node test-online.cjs
+          python3 build-standalone.py
+      - name: Install test browsers
+        run: |
+          python3 -m pip install --disable-pip-version-check playwright==1.57.0
+          python3 -m playwright install --with-deps chromium webkit
+      - name: Browser tests on normal HTTP
+        run: |
+          python3 -m http.server 8000 >/tmp/game-http.log 2>&1 &
+          sleep 2
+          python3 test-browser.py
+      - name: Wait for published version
+        if: github.event_name != 'pull_request'
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsSL "https://kouheim1979.github.io/todofuken-draft/app.js?verify=${GITHUB_SHA}" | grep -q "const VERSION='2.0.0-rc.1'"; then exit 0; fi
+            sleep 5
+          done
+          echo 'Published version not confirmed within 150 seconds.'
+          exit 1
+      - name: Published site and offline reload
+        if: github.event_name != 'pull_request'
+        env:
+          GAME_BASE_URL: https://kouheim1979.github.io/todofuken-draft/
+        run: python3 test-browser.py
