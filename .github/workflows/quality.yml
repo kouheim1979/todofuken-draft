@@ -40,7 +40,7 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           for i in $(seq 1 30); do
-            if curl -fsSL "https://kouheim1979.github.io/todofuken-draft/app.js?verify=${GITHUB_SHA}" | grep -q "const VERSION='2.0.0-rc.1'"; then exit 0; fi
+            if curl -fsSL "https://kouheim1979.github.io/todofuken-draft/app.js?verify=${GITHUB_SHA}" -o /tmp/tdb-published.js && grep -q "const VERSION='2.0.0-rc.1'" /tmp/tdb-published.js; then exit 0; fi
             sleep 5
           done
           echo 'Published version not confirmed within 150 seconds.'
